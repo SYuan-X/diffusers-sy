@@ -24,6 +24,7 @@ import shutil
 import warnings
 from contextlib import nullcontext
 from pathlib import Path
+import glob
 
 import numpy as np
 import torch
@@ -777,14 +778,47 @@ class DreamBoothDataset(Dataset):
             if not self.instance_data_root.exists():
                 raise ValueError("Instance images root doesn't exists.")
 
-            instance_images = [Image.open(path) for path in list(Path(instance_data_root).iterdir())]
+            instance_images_edited_surrogate = []
+            instance_images_edited_source = []
+            instance_images_original_surrogate = []
+            instance_images_original_source = []
+
+            path_list = sorted(glob.glob(os.path.join(instance_data_root,"EDITED","*","TRAIN","surrogate","*/*.jpg")))
+            for path in path_list:
+
+                # print(path)
+                original_path = path.replace("EDITED","ORIGINAL")[:-8]+".jpg"
+                instance_images_edited_surrogate.append(Image.open(path))
+                instance_images_edited_source.append(Image.open(path.replace("surrogate","source")))
+                instance_images_original_surrogate.append(Image.open(original_path))
+                instance_images_original_source.append(Image.open(original_path.replace("surrogate","source")))
+
             self.custom_instance_prompts = None
 
-        self.instance_images = []
-        for img in instance_images:
-            self.instance_images.extend(itertools.repeat(img, repeats))
 
-        self.pixel_values = []
+        self.instance_images_edited_source = []
+        for img in instance_images_edited_source:
+            self.instance_images_edited_source.extend(itertools.repeat(img, repeats))
+
+        
+        self.instance_images_edited_surrogate = []
+        for img in instance_images_edited_surrogate:
+            self.instance_images_edited_surrogate.extend(itertools.repeat(img, repeats))
+        
+        self.instance_images_original_surrogate = []
+        for img in instance_images_original_surrogate:
+            self.instance_images_original_surrogate.extend(itertools.repeat(img, repeats))
+
+        
+        self.instance_images_original_source = []
+        for img in instance_images_original_source:
+            self.instance_images_original_source.extend(itertools.repeat(img, repeats))
+        print(len(self.instance_images_original_source))
+
+        self.pixel_values_edited_source = []
+        self.pixel_values_edited_surrogate = []
+        self.pixel_values_original_source = []
+        self.pixel_values_original_surrogate = []
         train_resize = transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR)
         train_crop = transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size)
         train_flip = transforms.RandomHorizontalFlip(p=1.0)
@@ -794,7 +828,8 @@ class DreamBoothDataset(Dataset):
                 transforms.Normalize([0.5], [0.5]),
             ]
         )
-        for image in self.instance_images:
+        # def process_instance_images():
+        for image in self.instance_images_edited_source:
             image = exif_transpose(image)
             if not image.mode == "RGB":
                 image = image.convert("RGB")
@@ -810,12 +845,71 @@ class DreamBoothDataset(Dataset):
                 y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
                 image = crop(image, y1, x1, h, w)
             image = train_transforms(image)
-            self.pixel_values.append(image)
+            self.pixel_values_edited_source.append(image)
+        for image in self.instance_images_edited_surrogate:
+            image = exif_transpose(image)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            image = train_resize(image)
+            if args.random_flip and random.random() < 0.5:
+                # flip
+                image = train_flip(image)
+            if args.center_crop:
+                y1 = max(0, int(round((image.height - args.resolution) / 2.0)))
+                x1 = max(0, int(round((image.width - args.resolution) / 2.0)))
+                image = train_crop(image)
+            else:
+                y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
+                image = crop(image, y1, x1, h, w)
+            image = train_transforms(image)
+            self.pixel_values_edited_surrogate.append(image)
+        for image in self.instance_images_original_surrogate:
+            image = exif_transpose(image)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            image = train_resize(image)
+            if args.random_flip and random.random() < 0.5:
+                # flip
+                image = train_flip(image)
+            if args.center_crop:
+                y1 = max(0, int(round((image.height - args.resolution) / 2.0)))
+                x1 = max(0, int(round((image.width - args.resolution) / 2.0)))
+                image = train_crop(image)
+            else:
+                y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
+                image = crop(image, y1, x1, h, w)
+            image = train_transforms(image)
+            self.pixel_values_original_surrogate.append(image)
+        for image in self.instance_images_original_source:
+            image = exif_transpose(image)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            image = train_resize(image)
+            if args.random_flip and random.random() < 0.5:
+                # flip
+                image = train_flip(image)
+            if args.center_crop:
+                y1 = max(0, int(round((image.height - args.resolution) / 2.0)))
+                x1 = max(0, int(round((image.width - args.resolution) / 2.0)))
+                image = train_crop(image)
+            else:
+                y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
+                image = crop(image, y1, x1, h, w)
+            image = train_transforms(image)
+            self.pixel_values_original_source.append(image)
 
-        self.num_instance_images = len(self.instance_images)
+        self.num_instance_images = len(self.instance_images_edited_source)
+        print(len(self.instance_images_edited_source))
+        assert len(self.instance_images_edited_source)==len(self.instance_images_edited_surrogate)
+        assert len(self.instance_images_edited_source)==len(self.instance_images_original_surrogate)
+        assert len(self.instance_images_edited_source)==len(self.instance_images_original_source)
+        # self.num_instance_images = len(self.instance_images)
+        # self.num_instance_images = len(self.instance_images)
         self._length = self.num_instance_images
 
-        if class_data_root is not None:
+        # print("class_data_root:",class_data_root)
+
+        if class_data_root is not None: #None
             self.class_data_root = Path(class_data_root)
             self.class_data_root.mkdir(parents=True, exist_ok=True)
             self.class_images_path = list(self.class_data_root.iterdir())
@@ -840,9 +934,26 @@ class DreamBoothDataset(Dataset):
         return self._length
 
     def __getitem__(self, index):
+        print("index:",index)
         example = {}
-        instance_image = self.pixel_values[index % self.num_instance_images]
+        instance_images_edited_source = self.pixel_values_edited_source[index % self.num_instance_images]
+        instance_images_edited_surrogate = self.pixel_values_edited_surrogate[index % self.num_instance_images]
+        instance_images_original_source = self.pixel_values_original_source[index % self.num_instance_images]
+        instance_images_original_surrogate = self.pixel_values_original_surrogate[index % self.num_instance_images]
+        print("instance_images_edited_source",instance_images_edited_source.shape)
+        # example["instance_images"] = instance_image
+        top_row = torch.cat([instance_images_original_surrogate, instance_images_edited_surrogate], dim=2)
+        bottom_row = torch.cat([instance_images_original_source, instance_images_edited_source], dim=2)
+
+        # Step 2: 拼上下行 -> (3, 2H, 2W)
+        instance_image = torch.cat([top_row, bottom_row], dim=1)
+
+        # Step 3: 赋值到 example
         example["instance_images"] = instance_image
+        print("instance_image:",instance_image.shape)
+        # example["instance_images"] = instance_image
+        # example["instance_images"] = instance_image
+        # example["instance_images"] = instance_image
 
         if self.custom_instance_prompts:
             caption = self.custom_instance_prompts[index % self.num_instance_images]
