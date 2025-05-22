@@ -8,7 +8,7 @@ export INSTANCE_DIR="/data/sjl/DATA"
   --output_dir=$OUTPUT_DIR \
   --mixed_precision="bf16" \
   --train_text_encoder\
-  --instance_prompt="a photo of sks dog" \
+  --instance_prompt="achieve a transformation of {}" \
   --resolution=512 \
   --train_batch_size=1 \
   --guidance_scale=1 \
@@ -18,6 +18,6 @@ export INSTANCE_DIR="/data/sjl/DATA"
   --lr_scheduler="constant" \
   --lr_warmup_steps=0 \
   --max_train_steps=500 \
-  --validation_prompt="A photo of sks dog in a bucket" \
+  --validation_prompt="achieve a transformation of {}" \
   --seed="0" \
   --push_to_hub

@@ -50,6 +50,7 @@ from diffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
     FluxPipeline,
+    FluxImg2ImgPipeline,
     FluxTransformer2DModel,
 )
 from diffusers.optimization import get_scheduler
@@ -1220,7 +1221,7 @@ def main(args):
                 torch_dtype = torch.float16
             elif args.prior_generation_precision == "bf16":
                 torch_dtype = torch.bfloat16
-            pipeline = FluxPipeline.from_pretrained(
+            pipeline = FluxImg2ImgPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 torch_dtype=torch_dtype,
                 revision=args.revision,
@@ -1387,7 +1388,7 @@ def main(args):
                 # make sure to pop weight so that corresponding model is not saved again
                 weights.pop()
 
-            FluxPipeline.save_lora_weights(
+            FluxImg2ImgPipeline.save_lora_weights(
                 output_dir,
                 transformer_lora_layers=transformer_lora_layers_to_save,
                 text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
@@ -1407,7 +1408,7 @@ def main(args):
             else:
                 raise ValueError(f"unexpected save model: {model.__class__}")
 
-        lora_state_dict = FluxPipeline.lora_state_dict(input_dir)
+        lora_state_dict = FluxImg2ImgPipeline.lora_state_dict(input_dir)
 
         transformer_state_dict = {
             f"{k.replace('transformer.', '')}": v for k, v in lora_state_dict.items() if k.startswith("transformer.")
@@ -1819,7 +1820,7 @@ def main(args):
 
                 vae_scale_factor = 2 ** (len(vae_config_block_out_channels) - 1)
 
-                latent_image_ids = FluxPipeline._prepare_latent_image_ids(
+                latent_image_ids = FluxImg2ImgPipeline._prepare_latent_image_ids(
                     model_input.shape[0],
                     model_input.shape[2] // 2,
                     model_input.shape[3] // 2,
@@ -1847,7 +1848,7 @@ def main(args):
                 sigmas = get_sigmas(timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
                 noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
 
-                packed_noisy_model_input = FluxPipeline._pack_latents(
+                packed_noisy_model_input = FluxImg2ImgPipeline._pack_latents(
                     noisy_model_input,
                     batch_size=model_input.shape[0],
                     num_channels_latents=model_input.shape[1],
@@ -1874,7 +1875,7 @@ def main(args):
                     img_ids=latent_image_ids,
                     return_dict=False,
                 )[0]
-                model_pred = FluxPipeline._unpack_latents(
+                model_pred = FluxImg2ImgPipeline._unpack_latents(
                     model_pred,
                     height=model_input.shape[2] * vae_scale_factor,
                     width=model_input.shape[3] * vae_scale_factor,
@@ -1971,7 +1972,7 @@ def main(args):
                     text_encoder_one, text_encoder_two = load_text_encoders(text_encoder_cls_one, text_encoder_cls_two)
                     text_encoder_one.to(weight_dtype)
                     text_encoder_two.to(weight_dtype)
-                pipeline = FluxPipeline.from_pretrained(
+                pipeline = FluxImg2ImgPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     vae=vae,
                     text_encoder=unwrap_model(text_encoder_one),
@@ -2013,7 +2014,7 @@ def main(args):
         else:
             text_encoder_lora_layers = None
 
-        FluxPipeline.save_lora_weights(
+        FluxImg2ImgPipeline.save_lora_weights(
             save_directory=args.output_dir,
             transformer_lora_layers=transformer_lora_layers,
             text_encoder_lora_layers=text_encoder_lora_layers,
@@ -2021,7 +2022,7 @@ def main(args):
 
         # Final inference
         # Load previous pipeline
-        pipeline = FluxPipeline.from_pretrained(
+        pipeline = FluxImg2ImgPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             revision=args.revision,
             variant=args.variant,
